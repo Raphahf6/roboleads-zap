@@ -9,7 +9,7 @@ from datetime import datetime
 DATABASE_URL = os.environ.get("DATABASE_URL")
 EVOLUTION_URL = os.environ.get("EVOLUTION_URL")
 EVOLUTION_KEY = os.environ.get("EVOLUTION_KEY")
-INSTANCE_NAME = "Principal" 
+INSTANCE_NAME = "Raphael" 
 
 # Limite diário de segurança (apenas para garantir que o loop não fique infinito)
 LIMITE_POR_EXECUCAO = 10 
