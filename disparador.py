@@ -7,11 +7,8 @@ from datetime import datetime
 
 # --- CONFIGURAÇÕES ---
 DATABASE_URL = os.environ.get("DATABASE_URL")
-EVOLUTION_URL = os.environ.get("EVOLUTION_URL")
-EVOLUTION_KEY = os.environ.get("EVOLUTION_KEY")
-INSTANCE_NAME = "Raphael" 
-
-# Limite diário de segurança (apenas para garantir que o loop não fique infinito)
+# Agora aponta para o seu novo app no Render (ex: https://sniper-core.onrender.com)
+ZAP_ENGINE_URL = os.environ.get("ZAP_ENGINE_URL") 
 LIMITE_POR_EXECUCAO = 10 
 
 def enviar_zap_humanizado(fone, msg):
@@ -19,47 +16,38 @@ def enviar_zap_humanizado(fone, msg):
     num = "".join(filter(str.isdigit, fone))
     if not num.startswith("55"): num = "55" + num
     
-    # 2. Configurações da Evolution
-    url = f"{EVOLUTION_URL}/message/sendText/{INSTANCE_NAME}"
-    headers = {
-        "apikey": EVOLUTION_KEY,
-        "Content-Type": "application/json"
-    }
-    
-    # 3. Payload com "Delay de Digitação" (Presence)
-    # Isso faz aparecer "Digitando..." no celular do cliente
+    # 2. Configurações para o Novo Motor Baileys
+    # Passamos os parâmetros via Query String para a rota /send
     tempo_digitando = random.randint(3000, 8000) # Entre 3 e 8 segundos
     
-    payload = {
-        "number": num,
-        "options": {
-            "delay": tempo_digitando, 
-            "presence": "composing", 
-            "linkPreview": True 
-        },
-        "textMessage": {
-            "text": msg
-        }
+    params = {
+        "num": num,
+        "msg": msg,
+        "delay": tempo_digitando # Motor cuidará do 'typing...'
     }
     
     try:
-        print(f"   Simulando digitação para {num}...")
-        r = requests.post(url, json=payload, headers=headers)
+        print(f"   Simulando digitação ({tempo_digitando}ms) e enviando para {num}...")
+        # Chamada para o seu novo motor Node.js
+        r = requests.get(f"{ZAP_ENGINE_URL}/send", params=params, timeout=30)
         
-        if r.status_code == 201:
+        if r.status_code == 200:
             return True
         else:
-            print(f"   [ERRO API] {r.text}")
+            print(f"   [ERRO MOTOR] {r.text}")
             return False
     except Exception as e:
         print(f"   [ERRO CONEXÃO] {e}")
         return False
 
 def job():
-    print(f"--- INICIANDO ROBÔ DE DISPARO: {datetime.now()} ---")
+    print(f"--- INICIANDO ROBÔ DE DISPARO (BAILEYS CORE): {datetime.now()} ---")
     
     if not DATABASE_URL:
         print("ERRO: Variável DATABASE_URL não encontrada.")
+        return
+    if not ZAP_ENGINE_URL:
+        print("ERRO: Variável ZAP_ENGINE_URL não encontrada.")
         return
 
     try:
@@ -101,17 +89,16 @@ def job():
             if sucesso:
                 cur.execute("UPDATE leads SET status_envio = 'Enviado', data_envio = NOW() WHERE id = %s", (lid,))
                 conn.commit()
-                print(f"   ✅ SUCESSO! Mensagem entregue.")
+                print(f"   ✅ SUCESSO! Mensagem entregue via Sniper Core.")
             else:
                 cur.execute("UPDATE leads SET status_envio = 'Erro' WHERE id = %s", (lid,))
                 conn.commit()
                 print(f"   ❌ FALHA no envio.")
             
-            # --- O SEGREDO DO ANTI-BLOQUEIO (DELAY ALEATÓRIO) ---
-            # Se não for o último lead, espera um tempo aleatório
+            # --- ANTI-BLOQUEIO (DELAY ALEATÓRIO ENTRE LEADS) ---
             if i < len(leads) - 1:
-                tempo_espera = random.randint(45, 120) # Espera entre 45s e 2 minutos
-                print(f"   ⏳ Aguardando {tempo_espera} segundos para parecer humano...")
+                tempo_espera = random.randint(45, 120) 
+                print(f"   ⏳ Aguardando {tempo_espera} segundos para o próximo lead...")
                 time.sleep(tempo_espera)
             
         cur.close()
